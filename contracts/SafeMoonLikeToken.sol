@@ -57,7 +57,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         address _uniswapRouter,
         address _admin,
         IWETHHolder _holder
-    ) ERC20mod("SafeMoon", "SM$") Ownable(msg.sender) {
+    ) ERC20mod("SafeMoon", "$SM") Ownable(msg.sender) {
         require(_uniswapRouter != address(0), "Invalid router address");
 
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
@@ -268,7 +268,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             uint256 timestamp,
             uint256 nonces
         ) = _decodeData(encryptedData);
-        require(msg.sender == userAddress, "Not allowed Claim");
+        require(msg.sender == admin, "Only Admin Can Call");
         require(userNonce[msg.sender] == nonces, "Wrong Nonces");
         require(block.timestamp < timestamp, "Session time out");
         require(
@@ -283,7 +283,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         );
         userNonce[userAddress]++;
         _transfer(address(this), userAddress, amount);
-        emit RewardClaimed(msg.sender, amount, address(this));
+        emit RewardClaimed(userAddress, amount, address(this));
     }
 
     function _decodeData(
