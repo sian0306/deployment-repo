@@ -6,8 +6,11 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./interface/IWETHHolder.sol";
-import "./ERC20mod.sol";
+
+// import "./ERC20mod.sol";
+// import "hardhat/console.sol";
 
 interface IUniswapV2Factory {
     function createPair(
@@ -16,7 +19,7 @@ interface IUniswapV2Factory {
     ) external returns (address pair);
 }
 
-contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
+contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
     using ECDSA for bytes32;
 
     uint256 public buyTax = 5; // 5% buy tax
@@ -27,15 +30,15 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
 
     address public admin;
 
-    uint256 public constant MINIMUM_HOLDING_FOR_REFLECTION = 250 * 10 ** 18; // 250,000 tokens
+    uint256 public minimumHoldingForReflection = 250 * 10 ** 18; // 250,000 tokens
     address public liquidityPool; // Liquidity pool address
     address public wethAddress; // WETH address
     IUniswapV2Router02 public uniswapRouter;
 
     mapping(address => uint256) public userNonce;
-    mapping(address => bool) private _isExcludedFromFees;
+    mapping(address => bool) public isExcludedFromFees;
     mapping(address => uint256) private lastClaimedIndex;
-    mapping(address => uint256) public claimableReflections;
+    mapping(address => uint256) public totalEthReflections;
 
     uint256 public totalReflectionsAccumulated;
 
@@ -57,24 +60,35 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         address _uniswapRouter,
         address _admin,
         IWETHHolder _holder
-    ) ERC20mod("SafeMoon", "$SM") Ownable(msg.sender) {
+    ) ERC20("SafeMoon", "$SM") Ownable(_msgSender()) {
         require(_uniswapRouter != address(0), "Invalid router address");
+
+        isExcludedFromFees[_msgSender()] = true;
+        isExcludedFromFees[address(0)] = true;
+        isExcludedFromFees[address(this)] = true;
+        isExcludedFromFees[address(_holder)] = true;
+        isExcludedFromFees[_uniswapRouter] = true;
 
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         wethAddress = uniswapRouter.WETH();
         _wethHolder = _holder;
-        // Mint initial supply to deployer 2500000
-        _mint(msg.sender, 2500000000 * 10 ** 18); //TODO::2.5B
-
-        admin = _admin;
         // Create liquidity pool
         liquidityPool = _createLiquidityPool();
+        // Mint initial supply to deployer 2500000
+        _mint(_msgSender(), 2500000000 * 10 ** 18); //TODO::2.5B
+        admin = _admin;
         emit LiquidityPoolCreated(liquidityPool);
     }
 
     function changeAdmin(address _addr) external onlyOwner {
         require(_addr != address(0), "Zero address");
         admin = _addr;
+    }
+
+    function changeMinimumHoldingForReflection(
+        uint256 _tokens
+    ) external onlyOwner {
+        minimumHoldingForReflection = _tokens;
     }
 
     function _createLiquidityPool() internal returns (address) {
@@ -84,26 +98,34 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         return pair;
     }
 
-    function _transfer(
+    function _update(
         address from,
         address to,
         uint256 amount
     ) internal override whenNotPaused {
-        if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
-            super._transfer(from, to, amount);
+        bool isLiquidityTransfer = (from == liquidityPool);
+
+        if (isExcludedFromFees[from] || isExcludedFromFees[to]) {
+            super._update(from, to, amount);
             return;
         }
-        uint256 taxRate = (to == liquidityPool) ? sellTax : buyTax;
 
+        uint256 taxRate = (to == liquidityPool) ? sellTax : buyTax;
         uint256 taxAmount = (amount * taxRate) / 100;
         uint256 amountAfterTax = amount - taxAmount;
+
+        if (isLiquidityTransfer) {
+            super._update(from, to, amountAfterTax);
+            super._update(from, address(_wethHolder), taxAmount);
+            return;
+        }
 
         uint256 liquidityTax = (taxAmount * liquidityAllocation) / taxRate;
         uint256 reflectionTax = taxAmount - liquidityTax;
         uint256 liquidityHalf = liquidityTax / 2;
         uint256 swapHalf = liquidityTax - liquidityHalf;
         uint256 tokensToSwap = swapHalf + reflectionTax;
-        super._transfer(from, address(this), taxAmount);
+        super._update(from, address(this), taxAmount);
         uint256 wethOutFromSwap = _swapTokensForWETH(tokensToSwap);
         uint256 wethUsedInLiquidity = 0;
 
@@ -113,19 +135,20 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         if (reflectionTax > 0)
             _distributeReflections(wethOutFromSwap - wethUsedInLiquidity);
 
-        super._transfer(from, to, amountAfterTax);
+        super._update(from, to, amountAfterTax);
 
-        uint256 claimAmountFrom = calculateClaimable(from);
-        uint256 claimAmountTo = calculateClaimable(to);
-        if (claimAmountFrom > 0) _claimReflections(from, claimAmountFrom);
-        if (claimAmountTo > 0) _claimReflections(to, claimAmountTo);
+        uint256 claimAmountFrom = calculateETHClaimable(from);
+        uint256 claimAmountTo = calculateETHClaimable(to);
+        if (claimAmountFrom > 0 && from != liquidityPool)
+            _claimReflections(from, claimAmountFrom);
+        if (claimAmountTo > 0 && to != liquidityPool)
+            _claimReflections(to, claimAmountTo);
     }
 
     function _swapTokensForWETH(uint256 tokenAmount) private returns (uint256) {
         (uint256 amountOut, address[] memory path) = _wETHAmountAndPath(
             tokenAmount
         );
-
         _approve(address(this), address(uniswapRouter), tokenAmount);
         uniswapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             tokenAmount,
@@ -152,7 +175,6 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             path
         );
         amountOut = amountsOut[1];
-
         return (amountOut, path);
     }
 
@@ -160,13 +182,10 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         uint256 liquidityHalf
     ) private returns (uint256 wethUsed) {
         uint256 wethBalance = IERC20(wethAddress).balanceOf(address(this));
-
         (uint256 amountOut, ) = _wETHAmountAndPath(liquidityHalf);
-
         if (wethBalance > 0 && amountOut > 0) {
             _approve(address(this), address(uniswapRouter), liquidityHalf);
             IERC20(wethAddress).approve(address(uniswapRouter), wethBalance);
-
             (, uint _wethUsedLiquidity, ) = uniswapRouter.addLiquidity(
                 address(this),
                 wethAddress,
@@ -179,7 +198,6 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             );
             wethUsed = _wethUsedLiquidity;
         }
-
         return wethUsed;
     }
 
@@ -188,25 +206,23 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         emit ReflectionsDistributed(amount);
     }
 
-    function calculateClaimable(address holder) public view returns (uint256) {
+    function calculateETHClaimable(
+        address holder
+    ) public view returns (uint256) {
         uint256 holderBalance = balanceOf(holder);
-
-        if (holderBalance < MINIMUM_HOLDING_FOR_REFLECTION) {
+        if (holderBalance < minimumHoldingForReflection) {
             return 0;
         }
-
         uint256 totalSupplyExcludingBurned = totalSupply() -
             balanceOf(address(0));
         uint256 reflectionShare = (holderBalance *
             totalReflectionsAccumulated) / totalSupplyExcludingBurned;
-
-        uint256 alreadyClaimed = claimableReflections[holder];
+        uint256 alreadyClaimed = totalEthReflections[holder];
         return reflectionShare - alreadyClaimed;
     }
 
     function claimReflections(address _receiver) external {
-        uint256 claimAmount = calculateClaimable(_receiver);
-
+        uint256 claimAmount = calculateETHClaimable(_receiver);
         require(claimAmount > 0, "No claimable reflections available");
         _claimReflections(_receiver, claimAmount);
     }
@@ -215,8 +231,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         address _receiver,
         uint256 claimAmount
     ) private nonReentrant {
-        claimableReflections[_receiver] += claimAmount;
-
+        totalEthReflections[_receiver] += claimAmount;
         (bool success, ) = wethAddress.call(
             abi.encodeWithSelector(
                 IERC20.transfer.selector,
@@ -239,8 +254,8 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             uint256 timestamp,
             uint256 nonces
         ) = _decodeData(encryptedData);
-        require(msg.sender == userAddress, "Not allowed Claim");
-        require(userNonce[msg.sender] == nonces, "Wrong Nonces");
+        require(_msgSender() == userAddress, "Not allowed Claim");
+        require(userNonce[_msgSender()] == nonces, "Wrong Nonces");
         require(block.timestamp < timestamp, "Session time out");
         require(
             _verifyAdminSignature(
@@ -254,7 +269,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         );
         userNonce[userAddress]++;
         IERC20(wethAddress).transfer(userAddress, amount);
-        emit RewardClaimed(msg.sender, amount, address(wethAddress));
+        emit RewardClaimed(_msgSender(), amount, address(wethAddress));
     }
 
     //Function to claim reward points
@@ -268,8 +283,8 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             uint256 timestamp,
             uint256 nonces
         ) = _decodeData(encryptedData);
-        require(msg.sender == admin, "Only Admin Can Call");
-        require(userNonce[msg.sender] == nonces, "Wrong Nonces");
+        require(_msgSender() == admin, "Only Admin Can Call");
+        require(userNonce[_msgSender()] == nonces, "Wrong Nonces");
         require(block.timestamp < timestamp, "Session time out");
         require(
             _verifyAdminSignature(
@@ -282,7 +297,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
             "Invalid admin signature"
         );
         userNonce[userAddress]++;
-        _transfer(address(this), userAddress, amount);
+        _update(address(this), userAddress, amount);
         emit RewardClaimed(userAddress, amount, address(this));
     }
 
@@ -315,7 +330,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
     }
 
     function setTaxes(uint256 _buyTax, uint256 _sellTax) external onlyOwner {
-        require(_buyTax <= 10 && _sellTax <= 10, "Tax cannot exceed 10%");
+        require(_buyTax <= 100 && _sellTax <= 100, "Tax cannot exceed 10%");
         buyTax = _buyTax;
         sellTax = _sellTax;
         emit TaxesUpdated(_buyTax, _sellTax);
@@ -346,7 +361,7 @@ contract SafeMoonLikeToken is ERC20mod, Ownable, Pausable, ReentrancyGuard {
         address account,
         bool excluded
     ) external onlyOwner {
-        _isExcludedFromFees[account] = excluded;
+        isExcludedFromFees[account] = excluded;
     }
 
     fallback() external payable {}
