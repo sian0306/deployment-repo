@@ -14,7 +14,7 @@ async function main() {
   // Fetch the Uniswap Router Contract
   const uniswapRouter = await ethers.getContractAt("IUniswapV2Router02", uniswapRouterAddress);
   // const wethAddress = await uniswapRouter.WETH();
-  
+
   // Deploy WETHHolder
   console.log("Deploying WETHHolder...");
   const WETHHolder = await ethers.getContractFactory("WETHHolder");
@@ -58,7 +58,19 @@ async function main() {
   // console.log("Liquidity successfully added!");
 }
 
-// Run the script
+async function verifyContract(contractAddress, constructorArguments) {
+  try {
+    console.log(`Verifying contract at ${contractAddress}...`);
+    await run("verify:verify", {
+      address: contractAddress,
+      constructorArguments: constructorArguments,
+    });
+  } catch (error) {
+    console.error(`Verification failed for ${contractAddress}:`, error);
+  }
+}
+
+
 main()
   .then(() => process.exit(0))
   .catch((error) => {

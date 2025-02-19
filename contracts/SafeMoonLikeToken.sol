@@ -116,7 +116,7 @@ contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
 
         if (isLiquidityTransfer) {
             super._update(from, to, amountAfterTax);
-            super._update(from, address(_wethHolder), taxAmount);
+            super._update(from, address(this), taxAmount);
             return;
         }
 
@@ -222,9 +222,26 @@ contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
     }
 
     function claimReflections(address _receiver) external {
+        require(_receiver != address(0), "Zero Address");
+        uint balance = IERC20(address(this)).balanceOf(address(this));
+        if (balance > 0) {
+            uint256 liquidityTax = (balance * liquidityAllocation) / 5;
+            uint256 reflectionTax = balance - liquidityTax;
+            uint256 liquidityHalf = liquidityTax / 2;
+            uint256 swapHalf = liquidityTax - liquidityHalf;
+            uint256 tokensToSwap = swapHalf + reflectionTax;
+            uint256 wethOutFromSwap = _swapTokensForWETH(tokensToSwap);
+            uint256 wethUsedInLiquidity = 0;
+            // Handle taxes
+            if (liquidityTax > 0)
+                wethUsedInLiquidity = _addToLiquidity(liquidityHalf);
+            if (reflectionTax > 0)
+                _distributeReflections(wethOutFromSwap - wethUsedInLiquidity);
+        }
+
         uint256 claimAmount = calculateETHClaimable(_receiver);
-        require(claimAmount > 0, "No claimable reflections available");
-        _claimReflections(_receiver, claimAmount);
+        if (claimAmount > 0 && _receiver != liquidityPool)
+            _claimReflections(_receiver, claimAmount);
     }
 
     function _claimReflections(
@@ -241,35 +258,6 @@ contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
         );
         require(success, "Token transfer failed");
         emit ReflectionsClaimed(_receiver, claimAmount);
-    }
-
-    //Function to claim reward points
-    function claimRewardPointsWithETH(
-        bytes memory encryptedData,
-        bytes memory signature
-    ) external nonReentrant {
-        (
-            address userAddress,
-            uint256 amount,
-            uint256 timestamp,
-            uint256 nonces
-        ) = _decodeData(encryptedData);
-        require(_msgSender() == userAddress, "Not allowed Claim");
-        require(userNonce[_msgSender()] == nonces, "Wrong Nonces");
-        require(block.timestamp < timestamp, "Session time out");
-        require(
-            _verifyAdminSignature(
-                userAddress,
-                amount,
-                timestamp,
-                nonces,
-                signature
-            ),
-            "Invalid admin signature"
-        );
-        userNonce[userAddress]++;
-        IERC20(wethAddress).transfer(userAddress, amount);
-        emit RewardClaimed(_msgSender(), amount, address(wethAddress));
     }
 
     //Function to claim reward points
@@ -297,7 +285,7 @@ contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
             "Invalid admin signature"
         );
         userNonce[userAddress]++;
-        _update(address(this), userAddress, amount);
+        super._update(admin, userAddress, amount);
         emit RewardClaimed(userAddress, amount, address(this));
     }
 
@@ -330,7 +318,7 @@ contract SafeMoonLikeToken is ERC20, Ownable, Pausable, ReentrancyGuard {
     }
 
     function setTaxes(uint256 _buyTax, uint256 _sellTax) external onlyOwner {
-        require(_buyTax <= 100 && _sellTax <= 100, "Tax cannot exceed 10%");
+        require(_buyTax <= 10 && _sellTax <= 10, "Tax cannot exceed 10%");
         buyTax = _buyTax;
         sellTax = _sellTax;
         emit TaxesUpdated(_buyTax, _sellTax);

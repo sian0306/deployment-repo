@@ -5,20 +5,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interface/IWETHHolder.sol";
 
-contract WETHHolder is Ownable, IWETHHolder{
+contract WETHHolder is Ownable, IWETHHolder {
     // Accept native Ether
     receive() external payable {
         emit Received(msg.sender, msg.value);
     }
 
-    constructor(address _owner) Ownable(_owner){
-    }
+    constructor(address _owner) Ownable(_owner) {}
 
     // Transfer ERC20 tokens (like WETH) from this contract to another address
-    function transferTokens(
-        address token,
-        address to
-    ) external onlyOwner {
+    function transferTokens(address token, address to) external onlyOwner {
         require(to != address(0), "Invalid recipient address");
         uint256 amount = IERC20(token).balanceOf(address(this));
         require(amount > 0, "Invalid transfer amount");
@@ -28,7 +24,10 @@ contract WETHHolder is Ownable, IWETHHolder{
     }
 
     // Withdraw native Ether
-    function withdrawEther(address payable to, uint256 amount) external onlyOwner {
+    function withdrawEther(
+        address payable to,
+        uint256 amount
+    ) external onlyOwner {
         require(to != address(0), "Invalid recipient address");
         require(amount > 0, "Invalid withdrawal amount");
         require(address(this).balance >= amount, "Insufficient Ether balance");
