@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 // require("@nomiclabs/hardhat-waffle");
 require('hardhat-abi-exporter');
-require('dotenv').config({path: __dirname+'/.env'})
+require('dotenv').config({ path: __dirname + '/.env' })
 // require("@nomiclabs/hardhat-etherscan");
 require('hardhat-contract-sizer');
 require("@nomicfoundation/hardhat-ignition-ethers");
@@ -27,43 +27,44 @@ require("solidity-docgen")
 module.exports = {
   solidity: {
     compilers: [
-      {
-        version: "0.8.12",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 1000,
-          },
-        },
-      },
-      {
-        version: "0.8.21",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 1000,
-          },
-        },
-      },
-      {
-        version: "0.8.23",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 1000,
-          },
-        },
-      },
+      // {
+      //   version: "0.8.12",
+      //   settings: {
+      //     optimizer: {
+      //       enabled: true,
+      //       runs: 200,
+      //     },
+      //   },
+      // },
+      // {
+      //   version: "0.8.21",
+      //   settings: {
+      //     optimizer: {
+      //       enabled: true,
+      //       runs: 1000,
+      //     },
+      //   },
+      // },
+      // {
+      //   version: "0.8.23",
+      //   settings: {
+      //     optimizer: {
+      //       enabled: true,
+      //       runs: 1000,
+      //     },
+      //   },
+      // },
       {
         version: "0.8.20",
         settings: {
+          viaIR: true,
           optimizer: {
             enabled: true,
             runs: 1000,
           },
         },
       },
-            {
+      {
         version: "0.4.18",
         settings: {
           optimizer: {
@@ -72,12 +73,11 @@ module.exports = {
           },
         },
       },
-      
-    ],   
-}, 
+    ],
+  },
   networks: {
     hardhat: {
-      // chainId: 1337,
+      chainId: 1337,
       forking: {
         url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API}`,
       }
@@ -86,20 +86,20 @@ module.exports = {
     //   url: `https://eth-rinkeby.alchemyapi.io/v2/${process.env.ALCHEMY_API}`,
     //   accounts: [`0x${process.env.privateKey}`],
     // },
-    // testnet: {
-    //   url: "https://data-seed-prebsc-1-s1.binance.org:8545/",
-    //   chainId: 97,
-    //   gasPrice: 21000000000,
-    //   accounts: [`0x${process.env.privateKey}`],
-    // },
+    testnet: {
+      url: "https://data-seed-prebsc-1-s1.binance.org:8545/",
+      chainId: 97,
+      gasPrice: 21000000000,
+      accounts: [`0x${process.env.privateKey}`],
+    },
     // mainnet: {
     //   url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API}`,
     //   accounts: [`0x${process.env.privateKey}`],
     // },
-    // sepolia: {
-    //   url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API}`,
-    //   accounts: [`0x${process.env.privateKey}`],
-    // },
+    sepolia: {
+      url: `https://1rpc.io/sepolia`,
+      accounts: [`0x${process.env.privateKey}`],
+    },
     // arbGoerli: {
     //   url: `https://arb-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_API}`,
     //   accounts: [`0x${process.env.privateKey}`],
@@ -129,7 +129,7 @@ module.exports = {
     path: './abi',
     runOnCompile: true,
     clear: true,
-    only: [':SafeMoonLike$',':ERC20$'],
+    only: [':SafeMoonLike$', ':ERC20$'],
     flat: true,
     spacing: 2,
     pretty: true,
@@ -139,7 +139,7 @@ module.exports = {
     disambiguatePaths: false,
     runOnCompile: true,
     strict: true,
-    only: [':SafeMoonLike$',':ERC20$'],
+    only: [':SafeMoonLike$', ':ERC20$'],
   },
   etherscan: {
     // Your API key for Etherscan
@@ -147,6 +147,7 @@ module.exports = {
     // apiKey: "3WP9SDKDTK473KJCJCG4RJGS4H1DTEW1Z3" // Etherscan
     // apiKey: "E139ACP5E2XY7VXQE1BDR8WNUCJRVMNVEI", // Basescan
     apiKey: {
+      bscTestnet: '1TVS83ZTTVRP3P4TTIFKI488KUXTTUMPH5',
       mainnet: '3WP9SDKDTK473KJCJCG4RJGS4H1DTEW1Z3',
       sepolia: '3WP9SDKDTK473KJCJCG4RJGS4H1DTEW1Z3',
       base: 'E139ACP5E2XY7VXQE1BDR8WNUCJRVMNVEI',
@@ -184,9 +185,9 @@ module.exports = {
     timeout: 100000000,
     // parallel: false
   },
-  docgen:{
-    exclude:["contracts/TestAssets","contracts/testImplementaions"],
-    outputDir:'docs',
+  docgen: {
+    exclude: ["contracts/TestAssets", "contracts/testImplementaions"],
+    outputDir: 'docs',
     pages: () => 'api.md',
   }
 };

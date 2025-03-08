@@ -24,7 +24,7 @@ async function main() {
 
   // Deploy SafeMoonLikeToken
   console.log("Deploying SafeMoonLikeToken...");
-  const SafeMoonLikeToken = await ethers.getContractFactory("SafeMoonLikeToken");
+  const SafeMoonLikeToken = await ethers.getContractFactory("CryptoChamps");
   const token = await SafeMoonLikeToken.deploy(uniswapRouterAddress, owner.address, wETHHolder.target);
   await token.waitForDeployment();
   console.log("SafeMoonLikeToken deployed at:", token.target);
