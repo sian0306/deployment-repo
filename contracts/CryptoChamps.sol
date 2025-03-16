@@ -20,10 +20,9 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
 
     uint256 public constant MAX_PAUSE_DURATION = 6 hours; // Maximum pause time
     uint256 public constant PAUSE_COOLDOWN = 1 hours; // Minimum delay between pauses
-  
+
     uint256 private pausedAt; // Timestamp when the contract was paused
     uint256 private lastUnpausedAt; // Timestamp when the contract was last unpaused
-
 
     uint256 public buyTax = 5; // 5% buy tax
     uint256 public sellTax = 5; // 5% sell tax
@@ -40,7 +39,6 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
 
     mapping(address => uint256) public userNonce;
     mapping(address => bool) public isExcludedFromFees;
-    mapping(address => uint256) private lastClaimedIndex;
     mapping(address => uint256) public totalEthReflections;
 
     uint256 public totalReflectionsAccumulated;
@@ -108,7 +106,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         address from,
         address to,
         uint256 amount
-    ) internal override transferAllowed {
+    ) internal override transferAllowed nonReentrant {
         bool isLiquidityTransfer = (from == liquidityPool);
 
         if (isExcludedFromFees[from] || isExcludedFromFees[to]) {
@@ -151,7 +149,9 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
             _claimReflections(to, claimAmountTo);
     }
 
-    function _swapTokensForWETH(uint256 tokenAmount) private returns (uint256) {
+    function _swapTokensForWETH(
+        uint256 tokenAmount
+    ) private nonReentrant returns (uint256) {
         (uint256 amountOut, address[] memory path) = _wETHAmountAndPath(
             tokenAmount
         );
@@ -227,7 +227,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         return reflectionShare - alreadyClaimed;
     }
 
-    function claimReflections(address _receiver) external {
+    function claimReflections(address _receiver) external nonReentrant {
         require(_receiver != address(0), "Zero Address");
         uint balance = IERC20(address(this)).balanceOf(address(this));
         if (balance > 0) {
@@ -344,15 +344,15 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
     }
 
     function pause() public onlyOwner {
-      require(!paused(), "Already paused");
-      require(
-          block.timestamp >= lastUnpausedAt + PAUSE_COOLDOWN,
-          "Cooldown active: Cannot pause again yet"
-      );
+        require(!paused(), "Already paused");
+        require(
+            block.timestamp >= lastUnpausedAt + PAUSE_COOLDOWN,
+            "Cooldown active: Cannot pause again yet"
+        );
 
-      pausedAt = block.timestamp;
-      _pause();
-    } 
+        pausedAt = block.timestamp;
+        _pause();
+    }
 
     function unpause() public onlyOwner {
         require(paused(), "Not paused");
@@ -365,8 +365,11 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         return paused() && (block.timestamp >= pausedAt + MAX_PAUSE_DURATION);
     }
 
-    modifier transferAllowed()  {
-        require(!paused() || isPauseExpired(), "Pausable: paused and time limit not reached");
+    modifier transferAllowed() {
+        require(
+            !paused() || isPauseExpired(),
+            "Pausable: paused and time limit not reached"
+        );
         if (isPauseExpired()) {
             _unpause(); // Auto unpause if expired
         }
