@@ -37,7 +37,6 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
     address public wethAddress; // WETH address
     IUniswapV2Router02 public uniswapRouter;
 
-    mapping(address => uint256) public userNonce;
     mapping(address => bool) public isExcludedFromFees;
     mapping(address => uint256) public totalEthReflections;
 
@@ -51,6 +50,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         uint256 reflectionAllocation
     );
     event ReflectionsDistributed(uint256 amount);
+    event AdminChanged(address indexed oldAdmin, address indexed newAdmin);
     event ReflectionsClaimed(address indexed holder, uint256 amount);
     event RewardClaimed(
         address indexed to,
@@ -64,6 +64,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         IWETHHolder _holder
     ) ERC20("Champ", "CCG") Ownable(_msgSender()) {
         require(_uniswapRouter != address(0), "Invalid router address");
+        require(_admin != address(0), "Invalid Admin address");
 
         isExcludedFromFees[_msgSender()] = true;
         isExcludedFromFees[address(0)] = true;
@@ -84,6 +85,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
 
     function changeAdmin(address _addr) external onlyOwner {
         require(_addr != address(0), "Zero address");
+        emit AdminChanged(admin, _addr);
         admin = _addr;
     }
 
@@ -106,7 +108,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         address from,
         address to,
         uint256 amount
-    ) internal override transferAllowed nonReentrant {
+    ) internal override transferAllowed {
         bool isLiquidityTransfer = (from == liquidityPool);
 
         if (isExcludedFromFees[from] || isExcludedFromFees[to]) {
@@ -114,8 +116,8 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
             return;
         }
 
-        uint256 taxRate = (to == liquidityPool) ? sellTax : buyTax;
-        uint256 taxAmount = (amount * taxRate) / 100;
+        uint256 transactionTax = (to == liquidityPool) ? sellTax : buyTax;
+        uint256 taxAmount = (amount * transactionTax) / 100;
         uint256 amountAfterTax = amount - taxAmount;
 
         if (isLiquidityTransfer) {
@@ -124,7 +126,8 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
             return;
         }
 
-        uint256 liquidityTax = (taxAmount * liquidityAllocation) / taxRate;
+        uint256 liquidityTax = ((taxAmount * liquidityAllocation) /
+            transactionTax);
         uint256 reflectionTax = taxAmount - liquidityTax;
         uint256 liquidityHalf = liquidityTax / 2;
         uint256 swapHalf = liquidityTax - liquidityHalf;
@@ -231,7 +234,7 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
         require(_receiver != address(0), "Zero Address");
         uint balance = IERC20(address(this)).balanceOf(address(this));
         if (balance > 0) {
-            uint256 liquidityTax = (balance * liquidityAllocation) / 5;
+            uint256 liquidityTax = ((balance * liquidityAllocation) / 5);
             uint256 reflectionTax = balance - liquidityTax;
             uint256 liquidityHalf = liquidityTax / 2;
             uint256 swapHalf = liquidityTax - liquidityHalf;
@@ -268,59 +271,12 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
 
     //Function to claim reward points
     function claimRewardPointsWithCHP(
-        bytes memory encryptedData,
-        bytes memory signature
+        address _addr,
+        uint256 _amount
     ) external nonReentrant {
-        (
-            address userAddress,
-            uint256 amount,
-            uint256 timestamp,
-            uint256 nonces
-        ) = _decodeData(encryptedData);
         require(_msgSender() == admin, "Only Admin Can Call");
-        require(userNonce[_msgSender()] == nonces, "Wrong Nonces");
-        require(block.timestamp < timestamp, "Session time out");
-        require(
-            _verifyAdminSignature(
-                userAddress,
-                amount,
-                timestamp,
-                nonces,
-                signature
-            ),
-            "Invalid admin signature"
-        );
-        userNonce[userAddress]++;
-        super._update(admin, userAddress, amount);
-        emit RewardClaimed(userAddress, amount, address(this));
-    }
-
-    function _decodeData(
-        bytes memory encryptedData
-    ) internal pure returns (address, uint256, uint256, uint256) {
-        (
-            address userAddress,
-            uint256 amount,
-            uint256 timestamp,
-            uint256 nonces
-        ) = abi.decode(encryptedData, (address, uint256, uint256, uint256));
-        return (userAddress, amount, timestamp, nonces);
-    }
-
-    function _verifyAdminSignature(
-        address userAddress,
-        uint256 amount,
-        uint256 timestamp,
-        uint256 nonces,
-        bytes memory signature
-    ) internal view returns (bool) {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(userAddress, amount, timestamp, nonces)
-        );
-        bytes32 signedHash = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
-        );
-        return signedHash.recover(signature) == admin;
+        super._update(admin, _addr, _amount);
+        emit RewardClaimed(_addr, _amount, address(this));
     }
 
     function setTaxes(uint256 _buyTax, uint256 _sellTax) external onlyOwner {
