@@ -33,8 +33,8 @@ contract CryptoChamps is ERC20, Ownable, Pausable, ReentrancyGuard {
     address public admin;
 
     uint256 public minimumHoldingForReflection = 250 * 10 ** 18; // 250,000 tokens
-    address public liquidityPool; // Liquidity pool address
-    address public wethAddress; // WETH address
+    address public immutable liquidityPool; // Liquidity pool address
+    address public immutable wethAddress; // WETH address
     IUniswapV2Router02 public uniswapRouter;
 
     mapping(address => bool) public isExcludedFromFees;

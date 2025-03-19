@@ -238,15 +238,13 @@ describe("SafeMoonLikeToken Contract", function () {
 
     it("Should allow pausing after the cooldown period", async () => {
       await token.pause();
-      let tokenCoundown = await token.PAUSE_COOLDOWN()
-      // Skip time to allow cooldown
-      // await network.provider.send("evm_increaseTime", [tokenCoundown?.toString() + 1]);
-      // await network.provider.send("evm_mine");
-
-      // Now the owner should be able to pause again
-      // await token.pause();
       expect(await token.paused()).to.be.true;
+      const amount = ethers.parseUnits("100", 18);
+      // Try to transfer while paused
+      await expect(token.connect(addr1).transfer(addr2.address, amount))
+        .to.be.revertedWith("Pausable: paused and time limit not reached");
     });
+
 
     it("Should allow transfer once unpaused", async () => {
       await token.pause();
@@ -267,53 +265,6 @@ describe("SafeMoonLikeToken Contract", function () {
       await token.transfer(addr1.address, amount);
       expect(await token.balanceOf(addr1.address)).to.equal(amount2);
     });
-
-
-    // it("Should allow transfers when contract is not paused", async () => {
-    //   const amount = ethers.parseUnits("100", 18);
-
-    //   // Initial balance
-    //   let balanceBefore = await token.balanceOf(addr1.address);
-    //   expect(balanceBefore).to.equal(0);
-
-    //   // Transfer while not paused
-    //   await token.transfer(addr1.address, amount);
-    //   let balanceAfter = await token.balanceOf(addr1.address);
-    //   expect(balanceAfter).to.equal(amount);
-    // });
-
-    // it("Should block transfers when contract is paused", async () => {
-    //   // await token.pause(); // Pause the contract
-    //   const amount = ethers.parseUnits("100", 18);
-
-    //   // // Try to transfer while paused
-    //   // await expect(token.transfer(addr1.address, amount))
-    //   //   .to.be.revertedWith("Pausable: paused and time limit not reached");
-    // });
-
-    // it("Should automatically unpause the contract if pause duration has expired", async () => {
-    //   await token.pause();
-    //   // Pause the contract
-    //   let tokenCoundown = await token.MAX_PAUSE_DURATION()
-
-    //   // Simulate time passing beyond the max pause duration
-    //   await network.provider.send("evm_increaseTime", [tokenCoundown?.toString() + 1]);
-    //   await network.provider.send("evm_mine");
-
-    //   // Check if the contract auto unpauses after the max duration
-    //   await token.connect(owner).transfer(addr1.address, ethers.parseUnits("100", 18)); // Triggering transfer (should now succeed)
-    //   expect(await token.paused()).to.be.false; // Contract should be unpaused automatically
-    // });
-
-    // it("Should revert transfers if the contract is paused and the pause period has not expired", async () => {
-    //   // Pause the contract
-    //   await token.pause();
-    //   expect(await token.paused()).to.be.true;
-
-    //   // Transfer should still fail if the pause period has not expired
-    //   await expect(token.transfer(addr1.address, ethers.parseUnits("100", 18))).to.be.revertedWith("Pausable: paused and time limit not reached");
-    // });
-
 
   })
 });
