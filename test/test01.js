@@ -3,7 +3,7 @@ const { expect } = require("chai");
 const { AbiCoder, solidityPackedKeccak256, parseUnits, getBytes, assert, formatEther } = require("ethers");
 const { ethers, network } = require("hardhat");
 
-describe("SafeMoonLikeToken Contract", function () {
+describe("Crypto Champs Contract", function () {
   let token;
   let wETHHolder
   let owner;
@@ -15,7 +15,7 @@ describe("SafeMoonLikeToken Contract", function () {
   let wethAddress;
   let liquidityPool;
   let wethToken;
-  const amountSafeMoon = ethers.parseUnits("2000000000", 18);
+  const amountChamp = ethers.parseUnits("2000000000", 18);
   const amountWETH = ethers.parseEther("1");
 
   beforeEach(async () => {
@@ -34,22 +34,22 @@ describe("SafeMoonLikeToken Contract", function () {
     await wETHHolder.waitForDeployment();
     console.log("wETHHolder Contract Address : ", wETHHolder.target);
 
-    // Deploy the SafeMoonLikeToken contract
-    const SafeMoonLikeToken = await ethers.getContractFactory("CryptoChamps");
-    token = await SafeMoonLikeToken.deploy(uniswapRouterAddress, admin.address, wETHHolder.target);
+    // Deploy the Crypto Champs contract
+    const CryptoChampsToken = await ethers.getContractFactory("CryptoChamps");
+    token = await CryptoChampsToken.deploy(uniswapRouterAddress, admin.address, wETHHolder.target);
     await token.waitForDeployment();
-    console.log("SafeMoon Contract Address : ", token.target);
+    console.log("Crypto Champs Contract Address : ", token.target);
 
     await wETHHolder.transferOwnership(token.target)
 
     // Set liquidity pool address
     liquidityPool = await token.liquidityPool();
-    await token.approve(uniswapRouterAddress, amountSafeMoon);
+    await token.approve(uniswapRouterAddress, amountChamp);
 
     await uniswapRouter.addLiquidityETH(
-      token.target, // SafeMoon token address
-      amountSafeMoon,   // Amount of SafeMoon to add
-      0,                // Min amount of SafeMoon (set to 0 for now)
+      token.target, // Crypto Champs token address
+      amountChamp,   // Amount of Crypto Champs to add
+      0,                // Min amount of Crypto Champs (set to 0 for now)
       0,                // Min amount of ETH (set to 0 for now)
       owner.address,    // Address where liquidity tokens are sent
       Math.floor(Date.now() / 1000) + 60 * 10, // Deadline (10 minutes from now)

@@ -8,7 +8,7 @@ async function main() {
   // Parameters
   const uniswapRouterAddress = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24";  //Uniswap V2 Router:0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24
   // const initialSupply = ethers.parseUnits("1000000000", 18); // 1 Billion tokens
-  const amountSafeMoon = ethers.parseUnits("2500000000", 18); // SafeMoon tokens for liquidity
+  const amountChamp = ethers.parseUnits("2500000000", 18); // Crypto Champs tokens for liquidity
   const amountWETH = ethers.parseEther("0.01"); // WETH for liquidity
   let transaction
   // Fetch the Uniswap Router Contract
@@ -22,14 +22,14 @@ async function main() {
   await wETHHolder.waitForDeployment();
   console.log("WETHHolder deployed at:", wETHHolder.target);
 
-  // Deploy SafeMoonLikeToken
-  console.log("Deploying SafeMoonLikeToken...");
-  const SafeMoonLikeToken = await ethers.getContractFactory("CryptoChamps");
-  const token = await SafeMoonLikeToken.deploy(uniswapRouterAddress, owner.address, wETHHolder.target);
+  // Deploy Crypto Champs
+  console.log("Deploying Champ Token...");
+  const ChampLikeToken = await ethers.getContractFactory("CryptoChamps");
+  const token = await ChampLikeToken.deploy(uniswapRouterAddress, owner.address, wETHHolder.target);
   await token.waitForDeployment();
-  console.log("SafeMoonLikeToken deployed at:", token.target);
+  console.log("Crypto Champs deployed at:", token.target);
 
-  // Transfer ownership of WETHHolder to SafeMoonLikeToken
+  // Transfer ownership of WETHHolder to Crypto Champs
   transaction = await wETHHolder.transferOwnership(token.target);
   transaction.wait()
   // Exclude addresses from fees
@@ -40,14 +40,14 @@ async function main() {
 
   // Approve token for Uniswap Router
   console.log("Approving tokens for Uniswap Router...");
-  transaction = await token.approve(uniswapRouterAddress, amountSafeMoon);
+  transaction = await token.approve(uniswapRouterAddress, amountChamp);
   transaction.wait()
 
   // Add liquidity to Uniswap
   // console.log("Adding liquidity to Uniswap...");
   // transaction = await uniswapRouter.addLiquidityETH(
   //   "0x8369c0f98D8485FF8F1d9db71529D66a56D3DdB6",       // Token address
-  //   amountSafeMoon,     // Amount of SafeMoon tokens
+  //   amountChamp,     // Amount of Crypto Champs tokens
   //   0,                  // Min token amount
   //   0,                  // Min ETH amount
   //   owner.address,      // Liquidity recipient
